@@ -11,6 +11,13 @@
         <h1>Website Scraper for LLM Training</h1>
         <form id="urlForm">
             <input type="url" id="url" placeholder="Enter website URL" required>
+            <div id="authFields" style="display: none;">
+                <input type="text" id="username" placeholder="Username">
+                <input type="password" id="password" placeholder="Password">
+            </div>
+            <label>
+                <input type="checkbox" id="requiresAuth"> Requires Authentication
+            </label>
             <button type="submit" id="submitBtn">Scrape</button>
         </form>
         <div id="status"></div>

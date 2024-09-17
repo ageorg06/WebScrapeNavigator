@@ -17,7 +17,9 @@ def index():
 def scrape():
     url = request.json['url']
     max_workers = request.json.get('max_workers', 5)  # Default to 5 workers if not specified
-    scraper = WebScraper(url, max_pages=10, ignore_robots=True, max_workers=max_workers)
+    auth = request.json.get('auth')  # Get authentication information if provided
+    
+    scraper = WebScraper(url, max_pages=10, ignore_robots=True, max_workers=max_workers, auth=auth)
     job_id = db.create_job(url)
     
     try:
@@ -56,7 +58,15 @@ def download(job_id):
             data = json.loads(content)
         else:
             data = content
-        response = jsonify(data)
+        
+        # Format the JSON data with indentation and ensure proper encoding
+        formatted_content = json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True)
+        
+        response = app.response_class(
+            formatted_content,
+            mimetype='application/json',
+            content_type='application/json; charset=utf-8'
+        )
         response.headers.set('Content-Disposition', f'attachment; filename=scraped_content_{job_id}.json')
         return response
     else:

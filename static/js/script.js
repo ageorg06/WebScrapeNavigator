@@ -4,6 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitBtn = document.getElementById('submitBtn');
     const status = document.getElementById('status');
     const scrapedContent = document.getElementById('scrapedContent');
+    const requiresAuthCheckbox = document.getElementById('requiresAuth');
+    const authFields = document.getElementById('authFields');
+
+    requiresAuthCheckbox.addEventListener('change', () => {
+        authFields.style.display = requiresAuthCheckbox.checked ? 'block' : 'none';
+    });
 
     urlForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -20,13 +26,25 @@ document.addEventListener('DOMContentLoaded', () => {
         status.style.backgroundColor = '#FFA500';
         scrapedContent.innerHTML = '';
 
+        const requestBody = {
+            url,
+            max_workers: 5
+        };
+
+        if (requiresAuthCheckbox.checked) {
+            requestBody.auth = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+        }
+
         try {
             const response = await fetch('/scrape', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ url, max_workers: 5 }),  // Added max_workers parameter
+                body: JSON.stringify(requestBody),
             });
 
             const data = await response.json();

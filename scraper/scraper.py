@@ -7,7 +7,7 @@ from .utils import is_allowed_by_robots, respect_rate_limit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class WebScraper:
-    def __init__(self, start_url, max_pages=100, ignore_robots=False, max_workers=5):
+    def __init__(self, start_url, max_pages=200, ignore_robots=False, max_workers=5, auth=None):
         self.start_url = start_url
         self.domain = urlparse(start_url).netloc
         self.visited = set()
@@ -18,19 +18,22 @@ class WebScraper:
         self.skipped_urls = []
         self.ignore_robots = ignore_robots
         self.max_workers = max_workers
+        self.auth = auth
+        self.session = requests.Session()
+        if self.auth:
+            self.session.auth = (self.auth.get('username'), self.auth.get('password'))
 
     def scrape(self):
-        print(f"Starting parallel scrape of {self.start_url}")
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future = executor.submit(self._scrape_page_concurrent, self.start_url)
-            futures = {future}
-            while futures and self.pages_scraped < self.max_pages:
-                completed, futures = as_completed(futures, timeout=None), set()
-                for future in completed:
-                    new_urls = future.result()
-                    for url in new_urls:
-                        if self.pages_scraped < self.max_pages and url not in self.visited:
-                            futures.add(executor.submit(self._scrape_page_concurrent, url))
+        print(f"Starting depth-first scrape of {self.start_url}")
+        stack = [(self.start_url, 0)]  # (url, depth)
+        while stack and self.pages_scraped < self.max_pages:
+            url, depth = stack.pop()
+            if url not in self.visited:
+                self._log_url_tree(url, depth)
+                new_urls = self._scrape_page_concurrent(url)
+                for new_url in reversed(new_urls):  # Reverse to maintain original order in depth-first
+                    if new_url not in self.visited:
+                        stack.append((new_url, depth + 1))
 
         return json.dumps({
             'start_url': self.start_url,
@@ -40,6 +43,10 @@ class WebScraper:
             'errors': self.errors,
             'skipped_urls': self.skipped_urls
         })
+
+    def _log_url_tree(self, url, depth):
+        indent = "  " * depth
+        print(f"{indent}├─ {url}")
 
     def _scrape_page_concurrent(self, url):
         new_urls = []
@@ -61,7 +68,7 @@ class WebScraper:
         respect_rate_limit(self.domain)
 
         try:
-            response = requests.get(url, headers={'User-Agent': 'LLMTrainingBot/1.0'})
+            response = self.session.get(url, headers={'User-Agent': 'LLMTrainingBot/1.0'})
             response.raise_for_status()
             print(f"Response status code: {response.status_code}")
         except requests.RequestException as e:
