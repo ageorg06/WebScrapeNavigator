@@ -4,9 +4,10 @@ from urllib.parse import urljoin, urlparse
 import time
 import json
 from .utils import is_allowed_by_robots, respect_rate_limit
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 class WebScraper:
-    def __init__(self, start_url, max_pages=100, ignore_robots=False):
+    def __init__(self, start_url, max_pages=100, ignore_robots=False, max_workers=5):
         self.start_url = start_url
         self.domain = urlparse(start_url).netloc
         self.visited = set()
@@ -16,32 +17,44 @@ class WebScraper:
         self.errors = []
         self.skipped_urls = []
         self.ignore_robots = ignore_robots
+        self.max_workers = max_workers
 
     def scrape(self):
-        print(f"Starting scrape of {self.start_url}")
-        self._scrape_page(self.start_url)
+        print(f"Starting parallel scrape of {self.start_url}")
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            future = executor.submit(self._scrape_page_concurrent, self.start_url)
+            futures = {future}
+            while futures and self.pages_scraped < self.max_pages:
+                completed, futures = as_completed(futures, timeout=None), set()
+                for future in completed:
+                    new_urls = future.result()
+                    for url in new_urls:
+                        if self.pages_scraped < self.max_pages and url not in self.visited:
+                            futures.add(executor.submit(self._scrape_page_concurrent, url))
+
         return json.dumps({
             'start_url': self.start_url,
             'total_pages_attempted': len(self.visited),
             'total_pages_scraped': self.pages_scraped,
-            'content': self.content,  # Return all content
+            'content': self.content,
             'errors': self.errors,
             'skipped_urls': self.skipped_urls
         })
 
-    def _scrape_page(self, url):
+    def _scrape_page_concurrent(self, url):
+        new_urls = []
         print(f"Processing URL: {url}")
         if url in self.visited:
             print(f"Skipping {url}: Already visited")
-            return
+            return new_urls
         if not self.ignore_robots and not is_allowed_by_robots(url):
             print(f"Skipping {url}: Not allowed by robots.txt")
             self.skipped_urls.append({"url": url, "reason": "Not allowed by robots.txt"})
-            return
+            return new_urls
         if self.pages_scraped >= self.max_pages:
             print(f"Skipping {url}: Max pages reached")
             self.skipped_urls.append({"url": url, "reason": "Max pages reached"})
-            return
+            return new_urls
 
         print(f"Scraping {url}")
         self.visited.add(url)
@@ -55,7 +68,7 @@ class WebScraper:
             error_message = f"Error scraping {url}: {e}"
             print(error_message)
             self.errors.append(error_message)
-            return
+            return new_urls
 
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -73,7 +86,9 @@ class WebScraper:
         for link in links:
             next_url = urljoin(url, link['href'])
             if self._is_same_domain(next_url) and next_url not in self.visited:
-                self._scrape_page(next_url)
+                new_urls.append(next_url)
+
+        return new_urls
 
     def _is_same_domain(self, url):
         return urlparse(url).netloc == self.domain

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ url, max_workers: 5 }),  // Added max_workers parameter
             });
 
             const data = await response.json();
@@ -71,16 +71,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (content.length > 0) {
             const contentDiv = document.createElement('div');
-            contentDiv.innerHTML = '<h3>Scraped Content (First page):</h3>';
-            content.forEach((page, index) => {
-                const pageContent = document.createElement('div');
-                pageContent.innerHTML = `
-                    <h4>Page ${index + 1}: ${page.url}</h4>
-                    <p>${page.content.substring(0, 300)}...</p>
-                `;
-                contentDiv.appendChild(pageContent);
-            });
+            contentDiv.innerHTML = '<h3>Scraped Content:</h3>';
+            
+            function displayPages(start, end) {
+                for (let i = start; i < end && i < content.length; i++) {
+                    const page = content[i];
+                    const pageContent = document.createElement('div');
+                    pageContent.innerHTML = `
+                        <h4>Page ${i + 1}: ${page.url}</h4>
+                        <p>${page.content.substring(0, 300)}...</p>
+                    `;
+                    contentDiv.appendChild(pageContent);
+                }
+            }
+
+            displayPages(0, 5);
             scrapedContent.appendChild(contentDiv);
+
+            if (content.length > 5) {
+                const showMoreBtn = document.createElement('button');
+                showMoreBtn.textContent = 'Show More';
+                showMoreBtn.onclick = () => {
+                    const currentPageCount = contentDiv.children.length;
+                    displayPages(currentPageCount, currentPageCount + 5);
+                    if (currentPageCount + 5 >= content.length) {
+                        showMoreBtn.style.display = 'none';
+                    }
+                };
+                scrapedContent.appendChild(showMoreBtn);
+            }
         } else {
             scrapedContent.innerHTML += '<p>No content was scraped.</p>';
         }

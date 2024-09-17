@@ -16,7 +16,8 @@ def index():
 @app.route('/scrape', methods=['POST'])
 def scrape():
     url = request.json['url']
-    scraper = WebScraper(url, max_pages=10, ignore_robots=True)
+    max_workers = request.json.get('max_workers', 5)  # Default to 5 workers if not specified
+    scraper = WebScraper(url, max_pages=10, ignore_robots=True, max_workers=max_workers)
     job_id = db.create_job(url)
     
     try:
@@ -30,7 +31,7 @@ def scrape():
             'start_url': data['start_url'],
             'total_pages_attempted': data['total_pages_attempted'],
             'total_pages_scraped': data['total_pages_scraped'],
-            'content': data['content'][:1],  # Return only the first page for display
+            'content': data['content'],  # Return all scraped content
             'errors': data['errors'],
             'skipped_urls': data['skipped_urls']
         })
@@ -51,7 +52,10 @@ def show_content(job_id):
 def download(job_id):
     content = db.get_content(job_id)
     if content:
-        data = json.loads(content)
+        if isinstance(content, str):
+            data = json.loads(content)
+        else:
+            data = content
         response = jsonify(data)
         response.headers.set('Content-Disposition', f'attachment; filename=scraped_content_{job_id}.json')
         return response
