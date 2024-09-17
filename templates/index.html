@@ -18,6 +18,21 @@
             <label>
                 <input type="checkbox" id="requiresAuth"> Requires Authentication
             </label>
+            <h3>Preprocessing Options:</h3>
+            <div id="preprocessingOptions">
+                <label>
+                    <input type="checkbox" id="cleanHtml" checked> Clean HTML
+                </label>
+                <label>
+                    <input type="checkbox" id="removeSpecialChars" checked> Remove Special Characters
+                </label>
+                <label>
+                    <input type="checkbox" id="removeExtraWhitespace" checked> Remove Extra Whitespace
+                </label>
+                <label>
+                    <input type="checkbox" id="removeStopwords"> Remove Stopwords
+                </label>
+            </div>
             <button type="submit" id="submitBtn">Scrape</button>
         </form>
         <div id="status"></div>

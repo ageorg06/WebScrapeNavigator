@@ -10,12 +10,12 @@ celery_app = Celery('tasks', broker='redis://localhost:6379/0', backend='redis:/
 db = Database()
 
 @celery_app.task(bind=True)
-def scrape_website(self, url, max_pages=200, ignore_robots=False, max_workers=5, auth=None):
+def scrape_website(self, url, max_pages=200, ignore_robots=False, max_workers=5, auth=None, preprocessing_options=None):
     job_id = db.create_job(url)
     self.update_state(state='PROGRESS', meta={'job_id': job_id, 'status': 'started'})
 
     try:
-        scraper = WebScraper(url, max_pages=max_pages, ignore_robots=ignore_robots, max_workers=max_workers, auth=auth)
+        scraper = WebScraper(url, max_pages=max_pages, ignore_robots=ignore_robots, max_workers=max_workers, auth=auth, preprocessing_options=preprocessing_options)
         content = scraper.scrape()
         data = json.loads(content)
 

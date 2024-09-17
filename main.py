@@ -19,9 +19,10 @@ def scrape():
     url = request.json['url']
     max_workers = request.json.get('max_workers', 5)  # Default to 5 workers if not specified
     auth = request.json.get('auth')  # Get authentication information if provided
+    preprocessing_options = request.json.get('preprocessing_options', {})  # Get preprocessing options
     
     # Start the Celery task
-    task = scrape_website.delay(url, max_pages=200, ignore_robots=True, max_workers=max_workers, auth=auth)
+    task = scrape_website.delay(url, max_pages=200, ignore_robots=True, max_workers=max_workers, auth=auth, preprocessing_options=preprocessing_options)
     
     return jsonify({'status': 'task_started', 'task_id': task.id})
 

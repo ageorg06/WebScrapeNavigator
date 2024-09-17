@@ -28,7 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const requestBody = {
             url,
-            max_workers: 5
+            max_workers: 5,
+            preprocessing_options: {
+                clean_html: document.getElementById('cleanHtml').checked,
+                remove_special_chars: document.getElementById('removeSpecialChars').checked,
+                remove_extra_whitespace: document.getElementById('removeExtraWhitespace').checked,
+                remove_stopwords: document.getElementById('removeStopwords').checked
+            }
         };
 
         if (requiresAuthCheckbox.checked) {

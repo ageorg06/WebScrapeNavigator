@@ -5,9 +5,10 @@ import time
 import json
 from .utils import is_allowed_by_robots, respect_rate_limit
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from .preprocessor import ContentPreprocessor
 
 class WebScraper:
-    def __init__(self, start_url, max_pages=200, ignore_robots=False, max_workers=5, auth=None):
+    def __init__(self, start_url, max_pages=200, ignore_robots=False, max_workers=5, auth=None, preprocessing_options=None):
         self.start_url = start_url
         self.domain = urlparse(start_url).netloc
         self.visited = set()
@@ -22,6 +23,8 @@ class WebScraper:
         self.session = requests.Session()
         if self.auth:
             self.session.auth = (self.auth.get('username'), self.auth.get('password'))
+        self.preprocessor = ContentPreprocessor()
+        self.preprocessing_options = preprocessing_options or {}
 
     def scrape(self):
         print(f"Starting depth-first scrape of {self.start_url}")
@@ -83,7 +86,11 @@ class WebScraper:
         text_content = ' '.join(soup.stripped_strings)
         print(f"Extracted text content length: {len(text_content)}")
         
-        self.content.append({'url': url, 'content': text_content})
+        # Preprocess content
+        preprocessed_content = self.preprocessor.preprocess(text_content, self.preprocessing_options)
+        print(f"Preprocessed content length: {len(preprocessed_content)}")
+        
+        self.content.append({'url': url, 'content': preprocessed_content})
         self.pages_scraped += 1
         print(f"Total pages scraped: {self.pages_scraped}")
 
