@@ -3,6 +3,7 @@ import json
 from flask import Flask, render_template, request, jsonify
 from scraper.scraper import WebScraper
 from database.db import Database
+from tasks import scrape_website
 
 app = Flask(__name__)
 
@@ -19,27 +20,32 @@ def scrape():
     max_workers = request.json.get('max_workers', 5)  # Default to 5 workers if not specified
     auth = request.json.get('auth')  # Get authentication information if provided
     
-    scraper = WebScraper(url, max_pages=10, ignore_robots=True, max_workers=max_workers, auth=auth)
-    job_id = db.create_job(url)
+    # Start the Celery task
+    task = scrape_website.delay(url, max_pages=200, ignore_robots=True, max_workers=max_workers, auth=auth)
     
-    try:
-        content = scraper.scrape()
-        data = json.loads(content)
-        db.update_job_status(job_id, 'completed')
-        db.save_content(job_id, content)
-        return jsonify({
-            'status': 'success',
-            'job_id': job_id,
-            'start_url': data['start_url'],
-            'total_pages_attempted': data['total_pages_attempted'],
-            'total_pages_scraped': data['total_pages_scraped'],
-            'content': data['content'],  # Return all scraped content
-            'errors': data['errors'],
-            'skipped_urls': data['skipped_urls']
-        })
-    except Exception as e:
-        db.update_job_status(job_id, 'failed')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+    return jsonify({'status': 'task_started', 'task_id': task.id})
+
+@app.route('/task_status/<task_id>')
+def task_status(task_id):
+    task = scrape_website.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': 'Task is pending...'
+        }
+    elif task.state != 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', '')
+        }
+        if 'result' in task.info:
+            response['result'] = task.info['result']
+    else:
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    return jsonify(response)
 
 @app.route('/show_content/<int:job_id>')
 def show_content(job_id):

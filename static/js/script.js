@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         submitBtn.disabled = true;
         status.style.display = 'block';
-        status.textContent = 'Scraping in progress...';
+        status.textContent = 'Starting scraping task...';
         status.style.backgroundColor = '#FFA500';
         scrapedContent.innerHTML = '';
 
@@ -49,22 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
 
-            if (data.status === 'success') {
-                status.textContent = `Scraping completed! Pages attempted: ${data.total_pages_attempted}, Pages scraped: ${data.total_pages_scraped}`;
-                status.style.backgroundColor = '#4CAF50';
-                displayScrapedContent(data.content, data.errors);
-                
-                // Add download button
-                const downloadBtn = document.createElement('button');
-                downloadBtn.textContent = 'Download Full Content';
-                downloadBtn.onclick = () => {
-                    window.location.href = `/download/${data.job_id}`;
-                };
-                scrapedContent.appendChild(downloadBtn);
-                
-                submitBtn.disabled = false;
+            if (data.status === 'task_started') {
+                pollTaskStatus(data.task_id);
             } else {
-                throw new Error(data.message);
+                throw new Error('Failed to start scraping task');
             }
         } catch (error) {
             status.textContent = `Error: ${error.message}`;
@@ -72,6 +60,33 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.disabled = false;
         }
     });
+
+    function pollTaskStatus(taskId) {
+        const pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`/task_status/${taskId}`);
+                const data = await response.json();
+
+                if (data.state === 'PENDING' || data.state === 'PROGRESS') {
+                    status.textContent = `Scraping in progress... ${data.status}`;
+                } else if (data.state === 'SUCCESS') {
+                    clearInterval(pollInterval);
+                    status.textContent = 'Scraping completed!';
+                    status.style.backgroundColor = '#4CAF50';
+                    displayScrapedContent(data.result.content, data.result.errors);
+                    submitBtn.disabled = false;
+                } else {
+                    clearInterval(pollInterval);
+                    throw new Error(data.status);
+                }
+            } catch (error) {
+                clearInterval(pollInterval);
+                status.textContent = `Error: ${error.message}`;
+                status.style.backgroundColor = '#FF0000';
+                submitBtn.disabled = false;
+            }
+        }, 2000); // Poll every 2 seconds
+    }
 
     function displayScrapedContent(content, errors) {
         scrapedContent.innerHTML = '<h2>Scraping Results:</h2>';
