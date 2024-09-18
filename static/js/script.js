@@ -69,15 +69,26 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Response data:", data);
 
             if (data.status === 'completed') {
-                status.textContent = 'Scraping completed';
+                status.textContent = 'Scraping completed (max 2 pages)';
                 status.style.backgroundColor = '#4CAF50';
                 console.log("Updating URL tree");
                 updateUrlTree(data.url_tree);
                 console.log("Displaying scraped content");
                 displayScrapedContent(data.content, data.errors, data.job_id);
                 
-                console.log("Triggering download");
-                downloadContent(data.formatted_content, `scraped_content_${data.job_id}.json`);
+                console.log("Checking formatted content");
+                if (data.formatted_content) {
+                    console.log("Formatted content found, length:", data.formatted_content.length);
+                    downloadContent(data.formatted_content, `scraped_content_${data.job_id || 'no_id'}.json`);
+                } else if (data.content) {
+                    console.log("Formatted content not found, using content instead");
+                    const formattedContent = JSON.stringify(data.content, null, 2);
+                    downloadContent(formattedContent, `scraped_content_${data.job_id || 'no_id'}.json`);
+                } else {
+                    console.error("No content available for download");
+                    console.log("Response data keys:", Object.keys(data));
+                    alert("Error: No content available for download");
+                }
             } else {
                 throw new Error(data.message || 'Failed to scrape website');
             }
@@ -187,7 +198,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function downloadContent(content, filename) {
-        console.log("Downloading content:", { filename });
+        console.log("Downloading content:", { filename, contentLength: content ? content.length : 'undefined' });
+        if (!content) {
+            console.error("Content is undefined or null");
+            alert("Error: No content available for download");
+            return;
+        }
         const blob = new Blob([content], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -197,5 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        console.log("Download initiated");
     }
 });
