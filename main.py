@@ -38,7 +38,9 @@ def task_status(task_id):
     elif task.state != 'FAILURE':
         response = {
             'state': task.state,
-            'status': task.info.get('status', '')
+            'status': task.info.get('status', ''),
+            'pages_scraped': task.info.get('pages_scraped', 0),
+            'url_tree': task.info.get('url_tree', {})
         }
         if 'result' in task.info:
             response['result'] = task.info['result']

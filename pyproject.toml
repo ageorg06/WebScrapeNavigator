@@ -14,6 +14,7 @@ requests = "^2.32.3"
 beautifulsoup4 = "^4.12.3"
 celery = "5.2.7"
 redis = "^5.0.8"
+replit = "^4.1.0"
 
 
 [build-system]

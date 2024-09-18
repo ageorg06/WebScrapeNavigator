@@ -2,16 +2,23 @@ from celery import Celery
 from scraper.scraper import WebScraper
 from database.db import Database
 import json
-
-# Initialize Celery app
-celery_app = Celery('tasks', broker='redis://localhost:6379/0', backend='redis://localhost:6379/0')
+import os
 
 # Initialize database connection
-db = Database()
+db_connection = Database()
+
+# Initialize Celery app with Redis backend
+redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+celery_app = Celery('tasks', broker=redis_url, backend=redis_url)
+celery_app.conf.update(
+    task_serializer='json',
+    result_serializer='json',
+    accept_content=['json']
+)
 
 @celery_app.task(bind=True)
 def scrape_website(self, url, max_pages=200, ignore_robots=False, max_workers=5, auth=None, preprocessing_options=None):
-    job_id = db.create_job(url)
+    job_id = db_connection.create_job(url)
     self.update_state(state='PROGRESS', meta={'job_id': job_id, 'status': 'started', 'pages_scraped': 0, 'url_tree': []})
 
     try:
@@ -28,8 +35,8 @@ def scrape_website(self, url, max_pages=200, ignore_robots=False, max_workers=5,
         content = scraper.scrape(progress_callback=update_progress)
         data = json.loads(content)
 
-        db.update_job_status(job_id, 'completed')
-        db.save_content(job_id, content)
+        db_connection.update_job_status(job_id, 'completed')
+        db_connection.save_content(job_id, content)
 
         return {
             'status': 'success',
@@ -43,5 +50,5 @@ def scrape_website(self, url, max_pages=200, ignore_robots=False, max_workers=5,
             'url_tree': scraper.url_tree
         }
     except Exception as e:
-        db.update_job_status(job_id, 'failed')
+        db_connection.update_job_status(job_id, 'failed')
         return {'status': 'error', 'job_id': job_id, 'message': str(e)}
