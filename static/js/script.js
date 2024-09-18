@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM content loaded");
+
     const urlForm = document.getElementById('urlForm');
     const urlInput = document.getElementById('url');
     const submitBtn = document.getElementById('submitBtn');
@@ -8,12 +10,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const authFields = document.getElementById('authFields');
     const urlTree = document.getElementById('urlTree');
 
+    console.log("Elements retrieved:", { urlForm, urlInput, submitBtn, status, scrapedContent, requiresAuthCheckbox, authFields, urlTree });
+
     requiresAuthCheckbox.addEventListener('change', () => {
         authFields.style.display = requiresAuthCheckbox.checked ? 'block' : 'none';
     });
 
     urlForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        console.log("Form submitted");
+
         const url = urlInput.value.trim();
         
         if (!url) {
@@ -23,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         submitBtn.disabled = true;
         status.style.display = 'block';
-        status.textContent = 'Starting scraping task...';
+        status.textContent = 'Scraping in progress...';
         status.style.backgroundColor = '#FFA500';
         scrapedContent.innerHTML = '';
         urlTree.innerHTML = '';
@@ -46,7 +52,10 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
+        console.log("Request body:", requestBody);
+
         try {
+            console.log("Sending fetch request");
             const response = await fetch('/scrape', {
                 method: 'POST',
                 headers: {
@@ -55,56 +64,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(requestBody),
             });
 
+            console.log("Fetch response received");
             const data = await response.json();
+            console.log("Response data:", data);
 
-            if (data.status === 'task_started') {
-                startEventSource(data.task_id);
+            if (data.status === 'completed') {
+                status.textContent = 'Scraping completed';
+                status.style.backgroundColor = '#4CAF50';
+                console.log("Updating URL tree");
+                updateUrlTree(data.url_tree);
+                console.log("Displaying scraped content");
+                displayScrapedContent(data.content, data.errors, data.job_id);
+                
+                console.log("Triggering download");
+                downloadContent(data.formatted_content, `scraped_content_${data.job_id}.json`);
             } else {
-                throw new Error('Failed to start scraping task');
+                throw new Error(data.message || 'Failed to scrape website');
             }
         } catch (error) {
+            console.error("Error occurred:", error);
             status.textContent = `Error: ${error.message}`;
             status.style.backgroundColor = '#FF0000';
+        } finally {
             submitBtn.disabled = false;
         }
     });
 
-    function startEventSource(taskId) {
-        const eventSource = new EventSource(`/scrape_updates/${taskId}`);
-
-        eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            updateStatus(data);
-            updateUrlTree(data.url_tree);
-
-            if (data.status === 'completed') {
-                eventSource.close();
-                displayScrapedContent(data.result.content, data.result.errors);
-                submitBtn.disabled = false;
-            }
-        };
-
-        eventSource.onerror = (error) => {
-            console.error('EventSource failed:', error);
-            eventSource.close();
-            status.textContent = 'Error: Lost connection to the server';
-            status.style.backgroundColor = '#FF0000';
-            submitBtn.disabled = false;
-        };
-    }
-
-    function updateStatus(data) {
-        status.textContent = `Scraping in progress... Pages scraped: ${data.pages_scraped}`;
-        status.style.backgroundColor = '#FFA500';
-    }
-
     function updateUrlTree(tree) {
+        console.log("Updating URL tree with:", tree);
         urlTree.innerHTML = '';
-        const treeHtml = createTreeHtml(tree);
-        urlTree.appendChild(treeHtml);
+        if (tree && tree.children) {
+            const treeHtml = createTreeHtml(tree);
+            urlTree.appendChild(treeHtml);
+        }
     }
 
     function createTreeHtml(node) {
+        console.log("Creating tree HTML for node:", node);
         const li = document.createElement('li');
         const span = document.createElement('span');
         span.textContent = node.url;
@@ -121,17 +117,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         span.addEventListener('click', function() {
-            this.parentElement.querySelector('.nested').classList.toggle('active');
-            this.classList.toggle('caret-down');
+            const nestedUl = this.parentElement.querySelector('.nested');
+            if (nestedUl) {
+                nestedUl.classList.toggle('active');
+                this.classList.toggle('caret-down');
+            }
         });
 
         return li;
     }
 
-    function displayScrapedContent(content, errors) {
+    function displayScrapedContent(content, errors, jobId) {
+        console.log("Displaying scraped content:", { content, errors, jobId });
         scrapedContent.innerHTML = '<h2>Scraping Results:</h2>';
         
-        if (errors.length > 0) {
+        if (errors && errors.length > 0) {
             const errorsList = document.createElement('ul');
             errorsList.innerHTML = '<h3>Errors:</h3>';
             errors.forEach(error => {
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             scrapedContent.appendChild(errorsList);
         }
 
-        if (content.length > 0) {
+        if (content && content.length > 0) {
             const contentDiv = document.createElement('div');
             contentDiv.innerHTML = '<h3>Scraped Content:</h3>';
             
@@ -173,8 +173,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 scrapedContent.appendChild(showMoreBtn);
             }
+
+            // Add download button
+            const downloadBtn = document.createElement('button');
+            downloadBtn.textContent = 'Download Results';
+            downloadBtn.onclick = () => {
+                window.location.href = `/download/${jobId}`;
+            };
+            scrapedContent.appendChild(downloadBtn);
         } else {
             scrapedContent.innerHTML += '<p>No content was scraped.</p>';
         }
+    }
+
+    function downloadContent(content, filename) {
+        console.log("Downloading content:", { filename });
+        const blob = new Blob([content], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 });
