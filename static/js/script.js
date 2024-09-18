@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scrapedContent = document.getElementById('scrapedContent');
     const requiresAuthCheckbox = document.getElementById('requiresAuth');
     const authFields = document.getElementById('authFields');
+    const urlTree = document.getElementById('urlTree');
 
     requiresAuthCheckbox.addEventListener('change', () => {
         authFields.style.display = requiresAuthCheckbox.checked ? 'block' : 'none';
@@ -25,6 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         status.textContent = 'Starting scraping task...';
         status.style.backgroundColor = '#FFA500';
         scrapedContent.innerHTML = '';
+        urlTree.innerHTML = '';
 
         const requestBody = {
             url,
@@ -56,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.status === 'task_started') {
-                pollTaskStatus(data.task_id);
+                startEventSource(data.task_id);
             } else {
                 throw new Error('Failed to start scraping task');
             }
@@ -67,31 +69,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function pollTaskStatus(taskId) {
-        const pollInterval = setInterval(async () => {
-            try {
-                const response = await fetch(`/task_status/${taskId}`);
-                const data = await response.json();
+    function startEventSource(taskId) {
+        const eventSource = new EventSource(`/scrape_updates/${taskId}`);
 
-                if (data.state === 'PENDING' || data.state === 'PROGRESS') {
-                    status.textContent = `Scraping in progress... ${data.status}`;
-                } else if (data.state === 'SUCCESS') {
-                    clearInterval(pollInterval);
-                    status.textContent = 'Scraping completed!';
-                    status.style.backgroundColor = '#4CAF50';
-                    displayScrapedContent(data.result.content, data.result.errors);
-                    submitBtn.disabled = false;
-                } else {
-                    clearInterval(pollInterval);
-                    throw new Error(data.status);
-                }
-            } catch (error) {
-                clearInterval(pollInterval);
-                status.textContent = `Error: ${error.message}`;
-                status.style.backgroundColor = '#FF0000';
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateStatus(data);
+            updateUrlTree(data.url_tree);
+
+            if (data.status === 'completed') {
+                eventSource.close();
+                displayScrapedContent(data.result.content, data.result.errors);
                 submitBtn.disabled = false;
             }
-        }, 2000); // Poll every 2 seconds
+        };
+
+        eventSource.onerror = (error) => {
+            console.error('EventSource failed:', error);
+            eventSource.close();
+            status.textContent = 'Error: Lost connection to the server';
+            status.style.backgroundColor = '#FF0000';
+            submitBtn.disabled = false;
+        };
+    }
+
+    function updateStatus(data) {
+        status.textContent = `Scraping in progress... Pages scraped: ${data.pages_scraped}`;
+        status.style.backgroundColor = '#FFA500';
+    }
+
+    function updateUrlTree(tree) {
+        urlTree.innerHTML = '';
+        const treeHtml = createTreeHtml(tree);
+        urlTree.appendChild(treeHtml);
+    }
+
+    function createTreeHtml(node) {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = node.url;
+        span.classList.add('caret');
+        li.appendChild(span);
+
+        if (node.children && node.children.length > 0) {
+            const ul = document.createElement('ul');
+            ul.classList.add('nested');
+            node.children.forEach(child => {
+                ul.appendChild(createTreeHtml(child));
+            });
+            li.appendChild(ul);
+        }
+
+        span.addEventListener('click', function() {
+            this.parentElement.querySelector('.nested').classList.toggle('active');
+            this.classList.toggle('caret-down');
+        });
+
+        return li;
     }
 
     function displayScrapedContent(content, errors) {

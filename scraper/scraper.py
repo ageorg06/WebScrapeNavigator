@@ -25,18 +25,22 @@ class WebScraper:
             self.session.auth = (self.auth.get('username'), self.auth.get('password'))
         self.preprocessor = ContentPreprocessor()
         self.preprocessing_options = preprocessing_options or {}
+        self.url_tree = {"url": self.start_url, "children": []}
 
-    def scrape(self):
+    def scrape(self, progress_callback=None):
         print(f"Starting depth-first scrape of {self.start_url}")
-        stack = [(self.start_url, 0)]  # (url, depth)
+        stack = [(self.start_url, self.url_tree, 0)]  # (url, tree_node, depth)
         while stack and self.pages_scraped < self.max_pages:
-            url, depth = stack.pop()
+            url, tree_node, depth = stack.pop()
             if url not in self.visited:
-                self._log_url_tree(url, depth)
-                new_urls = self._scrape_page_concurrent(url)
-                for new_url in reversed(new_urls):  # Reverse to maintain original order in depth-first
+                new_urls = self._scrape_page_concurrent(url, tree_node)
+                if progress_callback:
+                    progress_callback(url, depth, self.pages_scraped)
+                for new_url in reversed(new_urls):
                     if new_url not in self.visited:
-                        stack.append((new_url, depth + 1))
+                        new_node = {"url": new_url, "children": []}
+                        tree_node["children"].append(new_node)
+                        stack.append((new_url, new_node, depth + 1))
 
         return json.dumps({
             'start_url': self.start_url,
@@ -44,14 +48,11 @@ class WebScraper:
             'total_pages_scraped': self.pages_scraped,
             'content': self.content,
             'errors': self.errors,
-            'skipped_urls': self.skipped_urls
+            'skipped_urls': self.skipped_urls,
+            'url_tree': self.url_tree
         })
 
-    def _log_url_tree(self, url, depth):
-        indent = "  " * depth
-        print(f"{indent}├─ {url}")
-
-    def _scrape_page_concurrent(self, url):
+    def _scrape_page_concurrent(self, url, tree_node):
         new_urls = []
         print(f"Processing URL: {url}")
         if url in self.visited:

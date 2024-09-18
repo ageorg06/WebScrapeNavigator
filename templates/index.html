@@ -36,6 +36,10 @@
             <button type="submit" id="submitBtn">Scrape</button>
         </form>
         <div id="status"></div>
+        <div id="urlTreeContainer">
+            <h3>URL Tree:</h3>
+            <ul id="urlTree"></ul>
+        </div>
         <div id="scrapedContent"></div>
     </div>
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>

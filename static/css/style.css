@@ -22,15 +22,16 @@ h1 {
 
 #urlForm {
     display: flex;
+    flex-direction: column;
     margin-bottom: 20px;
 }
 
 #url {
-    flex-grow: 1;
     padding: 10px;
     font-size: 16px;
     border: 1px solid #ddd;
-    border-radius: 4px 0 0 4px;
+    border-radius: 4px;
+    margin-bottom: 10px;
 }
 
 #submitBtn {
@@ -39,7 +40,7 @@ h1 {
     background-color: #4CAF50;
     color: white;
     border: none;
-    border-radius: 0 4px 4px 0;
+    border-radius: 4px;
     cursor: pointer;
 }
 
@@ -68,4 +69,58 @@ h1 {
 
 #downloadBtn:hover {
     background-color: #007B9A;
+}
+
+#preprocessingOptions {
+    margin-bottom: 10px;
+}
+
+#preprocessingOptions label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+#urlTreeContainer {
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+#urlTree {
+    margin: 0;
+    padding: 0;
+}
+
+.caret {
+    cursor: pointer;
+    user-select: none;
+}
+
+.caret::before {
+    content: "\25B6";
+    color: black;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.caret-down::before {
+    transform: rotate(90deg);
+}
+
+.nested {
+    display: none;
+}
+
+.active {
+    display: block;
+}
+
+#urlTree ul {
+    list-style-type: none;
+    padding-left: 20px;
+}
+
+#urlTree li {
+    margin: 5px 0;
 }
