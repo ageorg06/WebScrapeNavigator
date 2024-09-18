@@ -1,10 +1,8 @@
 import os
 import json
-from flask import Flask, render_template, request, jsonify, Response
+from flask import Flask, render_template, request, jsonify
 from scraper.scraper import WebScraper
 from database.db import Database
-from tasks import scrape_website
-from celery.result import AsyncResult
 
 app = Flask(__name__)
 
@@ -22,44 +20,24 @@ def scrape():
     auth = request.json.get('auth')
     preprocessing_options = request.json.get('preprocessing_options', {})
     
-    # Start the Celery task
-    task = scrape_website.delay(url, max_pages=200, ignore_robots=True, max_workers=max_workers, auth=auth, preprocessing_options=preprocessing_options)
-    
-    return jsonify({'status': 'task_started', 'task_id': task.id})
-
-@app.route('/task_status/<task_id>')
-def task_status(task_id):
-    task = AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
-            'state': task.state,
-            'status': 'Task is pending...'
-        }
-    elif task.state != 'FAILURE':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', ''),
-            'pages_scraped': task.info.get('pages_scraped', 0),
-            'url_tree': task.info.get('url_tree', {})
-        }
-        if 'result' in task.info:
-            response['result'] = task.info['result']
-    else:
-        response = {
-            'state': task.state,
-            'status': str(task.info)
-        }
-    return jsonify(response)
-
-@app.route('/scrape_updates/<task_id>')
-def scrape_updates(task_id):
-    def generate():
-        task = AsyncResult(task_id)
-        while not task.ready():
-            yield f"data: {json.dumps(task.info)}\n\n"
-            time.sleep(1)
-        yield f"data: {json.dumps({'status': 'completed', 'result': task.result})}\n\n"
-    return Response(generate(), mimetype='text/event-stream')
+    try:
+        scraper = WebScraper(url, max_pages=10, ignore_robots=True, max_workers=max_workers, auth=auth, preprocessing_options=preprocessing_options)
+        content = scraper.scrape()
+        data = json.loads(content)
+        
+        job_id = db.create_job(url)
+        db.update_job_status(job_id, 'completed')
+        db.save_content(job_id, content)
+        
+        return jsonify({
+            'status': 'completed',
+            'job_id': job_id,
+            'total_pages_attempted': data['total_pages_attempted'],
+            'total_pages_scraped': data['total_pages_scraped'],
+            'url_tree': data['url_tree']
+        })
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/show_content/<int:job_id>')
 def show_content(job_id):
